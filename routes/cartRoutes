@@ -1,0 +1,10 @@
+const express = require("express");
+const { addToCart, getCart,increaseQuantity,decreaseQuantity,removeFromCart} = require("../controllers/cartController");
+const authMiddleware = require("../middleware/authMiddleware");
+const router = express.Router();
+router.post("/add", authMiddleware, addToCart);
+router.get("/", authMiddleware, getCart);
+router.put("/increase", authMiddleware, increaseQuantity);
+router.put("/decrease", authMiddleware, decreaseQuantity);
+router.delete("/remove/:productId", authMiddleware, removeFromCart);
+module.exports = router;
