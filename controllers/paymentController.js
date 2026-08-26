@@ -2,6 +2,8 @@ const Stripe = require("stripe");
 const Cart = require("../models/Cart");
 const Order = require("../models/Order");
 
+require('dotenv').config();
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const createCheckoutSession = async (req, res) => {
@@ -40,7 +42,9 @@ const createCheckoutSession = async (req, res) => {
       success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.CLIENT_URL}/cart`,
     });
-
+    console.log("Stripe Session Created:");
+    console.log("Session ID:", session.id);
+    console.log("Session Metadata:", session.metadata);
     res.status(200).json({
       success: true,
       url: session.url,
@@ -56,7 +60,11 @@ const createCheckoutSession = async (req, res) => {
 };
 
 const handleStripeWebhook = async (req, res) => {
+  console.log("WEBHOOK HIT ");
+
   const sig = req.headers["stripe-signature"];
+
+  console.log("Stripe signature exists:", !!sig);
 
   let event;
 
@@ -66,8 +74,10 @@ const handleStripeWebhook = async (req, res) => {
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
+
+    console.log("Event type:", event.type);
   } catch (error) {
-    console.log("Webhook signature error:", error.message);
+    console.log(" Webhook signature error:", error.message);
 
     return res.status(400).send(`Webhook Error: ${error.message}`);
   }
@@ -76,20 +86,37 @@ const handleStripeWebhook = async (req, res) => {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
 
+      console.log("Checkout session ID:", session.id);
+
+      console.log("Session metadata:", session.metadata);
+
       const userId = session.metadata?.userId;
 
+      console.log("User ID:", userId);
+
       if (!userId) {
+        console.log(" USER ID MISSING");
+
         return res.status(400).json({
           success: false,
           message: "User ID missing from Stripe session",
         });
       }
 
+      console.log(" User ID found");
+
       const existingOrder = await Order.findOne({
         stripeSessionId: session.id,
       });
 
+      console.log(
+        "Existing order:",
+        existingOrder ? "YES" : "NO"
+      );
+
       if (existingOrder) {
+        console.log("Order already exists");
+
         return res.json({
           received: true,
         });
@@ -99,11 +126,18 @@ const handleStripeWebhook = async (req, res) => {
         user: userId,
       }).populate("items.product");
 
+      console.log("Cart found:", !!cart);
+      console.log("Cart items:", cart?.items?.length);
+
       if (!cart || cart.items.length === 0) {
+        console.log(" CART EMPTY OR NOT FOUND");
+
         return res.json({
           received: true,
         });
       }
+
+      console.log(" Cart found with items");
 
       const orderItems = cart.items.map((item) => ({
         product: item.product._id,
@@ -113,12 +147,13 @@ const handleStripeWebhook = async (req, res) => {
         quantity: item.quantity,
       }));
 
-      const totalAmount = cart.items.reduce(
-        (total, item) => total + item.product.price * item.quantity,
-        0
-      );
+      console.log("Order items:", orderItems);
 
-      await Order.create({
+      const totalAmount = session.amount_total / 100;
+
+      console.log("Total amount from Stripe:", totalAmount);
+
+      const order = await Order.create({
         user: userId,
         items: orderItems,
         totalAmount,
@@ -127,19 +162,27 @@ const handleStripeWebhook = async (req, res) => {
         orderStatus: "processing",
       });
 
+      console.log("✅ ORDER CREATED");
+      console.log("Order ID:", order._id);
+
       await Cart.findOneAndUpdate(
         { user: userId },
         { $set: { items: [] } }
       );
+
+      console.log("✅ CART CLEARED");
     }
 
-    res.json({
+    console.log("WEBHOOK SUCCESS ");
+
+    return res.json({
       received: true,
     });
-  } catch (error) {
-    console.log("Stripe webhook error:", error);
 
-    res.status(500).json({
+  } catch (error) {
+    console.log(" Stripe webhook processing error:", error);
+
+    return res.status(500).json({
       success: false,
       message: "Webhook processing failed",
     });

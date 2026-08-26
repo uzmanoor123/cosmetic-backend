@@ -1,25 +1,18 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const paymentRoutes = require("./routes/paymentRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
 require("dotenv").config();
 
 const app = express();
 
 app.use(cors());
 
+app.use( "/api/payment/webhook", express.raw({ type: "application/json" }), webhookRoutes);
 app.get("/", (req, res) => {
   res.send("Backend is running");
 });
-
-const paymentRoutes = require("./routes/paymentRoutes");
-const webhookRoutes = require("./routes/webhookRoutes");
-
-app.use(
-  "/api/payment/webhook",
-  express.raw({ type: "application/json" }),
-  webhookRoutes
-);
-
 app.use(express.json());
 
 const authRoutes = require("./routes/authRoutes");
