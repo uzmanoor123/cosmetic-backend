@@ -26,6 +26,9 @@ app.use("/api/cart", cartRoutes);
 
 app.use("/api/payment", paymentRoutes);
 
+const orderRoutes = require("./routes/orderRoutes");
+app.use("/api/orders", orderRoutes);
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))

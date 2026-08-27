@@ -151,8 +151,6 @@ const handleStripeWebhook = async (req, res) => {
 
       const totalAmount = session.amount_total / 100;
 
-      console.log("Total amount from Stripe:", totalAmount);
-
       const order = await Order.create({
         user: userId,
         items: orderItems,
@@ -162,26 +160,16 @@ const handleStripeWebhook = async (req, res) => {
         orderStatus: "processing",
       });
 
-      console.log("✅ ORDER CREATED");
-      console.log("Order ID:", order._id);
-
       await Cart.findOneAndUpdate(
         { user: userId },
         { $set: { items: [] } }
       );
-
-      console.log("✅ CART CLEARED");
     }
-
-    console.log("WEBHOOK SUCCESS ");
-
     return res.json({
       received: true,
     });
-
   } catch (error) {
     console.log(" Stripe webhook processing error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Webhook processing failed",
