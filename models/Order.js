@@ -42,13 +42,17 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
+      enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
     },
     stripeSessionId: {
       type: String,
       required: true,
       unique: true,
+    },
+    refundId: {
+      type: String,
+      default: "",
     },
     orderStatus: {
       type: String,

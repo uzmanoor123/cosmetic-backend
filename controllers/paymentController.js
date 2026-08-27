@@ -176,8 +176,105 @@ const handleStripeWebhook = async (req, res) => {
     });
   }
 };
+const getAllTransactions = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Admin only.",
+      });
+    }
+
+    const orders = await Order.find()
+      .populate("user", "name email")
+      .populate("items.product", "name title image brand category")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      transactions: orders,
+    });
+  } catch (error) {
+    console.log("Get transactions error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to fetch transactions",
+    });
+  }
+};
+const refundTransaction = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    if (order.paymentStatus === "refunded") {
+      return res.status(400).json({
+        success: false,
+        message: "This transaction has already been refunded",
+      });
+    }
+
+    if (order.paymentStatus !== "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Only paid transactions can be refunded",
+      });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(
+      order.stripeSessionId,
+      {
+        expand: ["payment_intent"],
+      }
+    );
+
+    const paymentIntent = session.payment_intent;
+
+    if (!paymentIntent) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment information not found",
+      });
+    }
+
+    const refund = await stripe.refunds.create({
+      payment_intent: paymentIntent.id,
+    });
+
+    order.paymentStatus = "refunded";
+    order.orderStatus = "cancelled";
+    order.refundId = refund.id;
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Transaction refunded successfully",
+      refund,
+      order,
+    });
+
+  } catch (error) {
+    console.log("Refund error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to refund transaction",
+    });
+  }
+};
 
 module.exports = {
   createCheckoutSession,
   handleStripeWebhook,
+  getAllTransactions,
+  refundTransaction
 };
