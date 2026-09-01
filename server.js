@@ -10,9 +10,7 @@ const app = express();
 app.use(cors());
 
 app.use( "/api/payment/webhook", express.raw({ type: "application/json" }), webhookRoutes);
-app.get("/", (req, res) => {
-  res.send("Backend is running");
-});
+app.get("/", (req, res) => {res.send("Backend is running");});
 app.use(express.json());
 
 const authRoutes = require("./routes/authRoutes");
@@ -31,6 +29,9 @@ app.use("/api/orders", orderRoutes);
 
 const reviewRoutes = require("./routes/reviewRoutes");
 app.use("/api/reviews", reviewRoutes);
+
+const aiRoutes = require("./routes/aiRoutes.js");
+app.use("/api/ai", aiRoutes);
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))

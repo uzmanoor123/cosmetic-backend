@@ -1,5 +1,5 @@
 const Product = require("../models/Product");
-
+const Review = require("../models/Review");
 const addProduct = async (req, res) => {
   try {
     const product = await Product.create(req.body);
@@ -16,18 +16,43 @@ const addProduct = async (req, res) => {
     });
   }
 };
+
 const getProducts = async (req, res) => {
   try {
     const products = await Product.find();
 
+    const productsWithReviews = await Promise.all(
+      products.map(async (product) => {
+        const reviews = await Review.find({
+          product: product._id,
+        });
+
+        const totalReviews = reviews.length;
+
+        const averageRating =
+          totalReviews > 0
+            ? reviews.reduce((sum, review) => sum + review.rating, 0) /
+              totalReviews
+            : 0;
+
+        return {
+          ...product.toObject(),
+          averageRating,
+          totalReviews,
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
-      products,
+      products: productsWithReviews,
     });
   } catch (error) {
+    console.log("Get products error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Unable to get products",
     });
   }
 };
