@@ -4,18 +4,25 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `
-You are a skincare product recommendation assistant for a cosmetic e-commerce store.
 
-Your job is to understand the user's skin concern and recommend suitable products ONLY from the products provided by the store.
+const SYSTEM_PROMPT = `
+You are BeautyBloom's skincare product recommendation AI.
+
+Your job is to understand the customer's skin concern and recommend suitable products ONLY from the BeautyBloom store products provided to you.
 
 IMPORTANT RULES:
 
-1. ONLY recommend products that exist in the provided store products list.
+1. ONLY recommend products that exist in the provided BeautyBloom store products list.
+
 2. NEVER invent a product.
+
 3. NEVER invent a product ID.
-4. NEVER recommend products that are not present in the store list.
-5. Carefully analyze:
+
+4. NEVER recommend a product that is not present in the provided products list.
+
+5. The productId MUST exactly match the _id of a product provided in the products list.
+
+6. Carefully analyze:
    - product name
    - brand
    - category
@@ -24,66 +31,138 @@ IMPORTANT RULES:
    - ingredients
    - benefits
    - skinType
-6. Match the user's concern with the product's concerns, benefits, ingredients and skin type.
-7. Give the most relevant products first.
-8. If no product is suitable, return an empty recommendations array.
-9. Do not diagnose a medical condition.
-10. If the user describes a serious skin condition, severe pain, infection, swelling, bleeding, or persistent symptoms, recommend consulting a dermatologist.
-11. Do not claim that a cosmetic product can cure a disease.
-12. Give a short and simple explanation for why each recommended product matches the user's concern.
-13. Only recommend products that are relevant to the user's concern.
-14. Do not recommend every product just because it is available.
-15. The productId must exactly match the _id provided in the store product list.
+   - price
 
-The response MUST be valid JSON in the requested format.
+7. Match the customer's:
+   - skin type
+   - skin concerns
+   - preferences
+   - budget
+   - skincare needs
+
+   with the available products.
+
+8. Recommend only genuinely relevant products.
+
+9. Do NOT recommend every available product.
+
+10. Recommend a maximum of 3 products.
+
+11. Give the most relevant products first.
+
+12. Give a match score from 0 to 100 for every recommendation.
+
+13. Give a short and useful reason for every recommended product.
+
+14. If there is no suitable product, return an empty recommendations array.
+
+15. Do not diagnose medical conditions.
+
+16. Do not claim that a cosmetic product can cure a disease.
+
+17. If the customer describes severe pain, infection, swelling, bleeding, or a persistent serious skin problem, recommend consulting a dermatologist.
+
+18. Generate 3 to 5 personalized skincare tips based on the customer's skin type, concerns, preferences, budget, and routine.
+
+19. Each beauty tip must be a short and useful sentence.
+
+20. Do not invent information about products.
+
+21. Only use information that is present in the provided store products list.
+
+The response MUST be valid JSON according to the provided response schema.
 `;
+
 
 export const getSkinRecommendations = async (
   userProblem,
   products
 ) => {
   try {
+
     const productData = products.map((product) => ({
       _id: product._id.toString(),
+
       name: product.name,
+
       brand: product.brand,
+
       price: product.price,
+
       category: product.category,
+
       concerns: product.concerns || [],
+
       description: product.description || "",
+
       ingredients: product.ingredients || [],
+
       benefits: product.benefits || [],
+
       skinType: product.skinType || [],
+
       image: product.image || "",
     }));
 
     const prompt = `
-USER SKIN CONCERN:
+CUSTOMER'S SKIN CONCERN:
 
 ${userProblem}
 
-AVAILABLE STORE PRODUCTS:
+
+BEAUTYBLOOM STORE PRODUCTS:
 
 ${JSON.stringify(productData, null, 2)}
 
-Analyze the user's concern and select only the most relevant products from the available store products.
 
-Return recommendations with:
-- exact productId
-- product name
-- reason why it matches
-- match score from 0 to 100
+TASK:
 
-If there is no suitable product, return an empty recommendations array.
+Analyze the customer's skin concern and recommend the most suitable products from the BeautyBloom store.
+
+Consider:
+
+- skin type
+- skin concerns
+- product concerns
+- ingredients
+- benefits
+- product description
+- budget
+- preferences
+- skincare needs
+
+IMPORTANT:
+
+- Recommend ONLY products from the provided store products.
+- NEVER invent a product.
+- NEVER invent a product ID.
+- productId MUST exactly match one of the provided _id values.
+- Recommend maximum 3 products.
+- Recommend only genuinely relevant products.
+- Give a useful reason for every recommendation.
+- Give a match score between 0 and 100.
+- If there is no suitable product, return an empty recommendations array.
+
+Also generate 3 to 5 personalized skincare tips.
+
+Each beauty tip must be a short useful sentence.
+
+Return JSON only.
 `;
 
+    console.log(
+      "Sending products to Gemini:",
+      productData.length
+    );
+
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.6-flash",
+
       contents: prompt,
 
       config: {
-        systemInstruction: SYSTEM_PROMPT,
 
+        systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
 
         responseSchema: {
@@ -126,50 +205,187 @@ If there is no suitable product, return an empty recommendations array.
             message: {
               type: "string",
             },
+
+            beautyTips: {
+              type: "array",
+
+              items: {
+                type: "string",
+              },
+            },
           },
 
           required: [
             "recommendations",
             "message",
+            "beautyTips",
           ],
         },
       },
     });
 
-    return JSON.parse(response.text);
+    console.log(
+      "Gemini Recommendation Raw Response:"
+    );
+
+    console.log(response.text);
+
+    const result = JSON.parse(response.text);
+
+    return result;
+
   } catch (error) {
-    console.error("Gemini recommendation error:", error);
+    console.error(
+      "Gemini recommendation error:",
+      error
+    );
+
     throw error;
   }
 };
-export const chatWithBeautyAI = async (userMessage) => {
+
+
+const CHAT_SYSTEM_PROMPT = `
+You are BeautyBloom's AI Beauty Consultant.
+
+You are an AI assistant created specifically for BeautyBloom.
+
+You ONLY help with beauty-related topics.
+
+You can answer questions about:
+
+- Skincare
+- Skin types
+- Skin concerns
+- Skincare routines
+- Cosmetic products
+- Makeup
+- Hair care
+- Body care
+- Beauty ingredients
+- Beauty routines
+- Product usage
+- BeautyBloom products
+
+
+IMPORTANT:
+
+If the user's question is NOT related to beauty, skincare, cosmetics, makeup, hair care, body care, beauty ingredients, beauty routines, product usage, or BeautyBloom products, DO NOT answer the question.
+
+
+Do NOT answer questions about:
+
+- Programming
+- Coding
+- JavaScript
+- Python
+- Java
+- C++
+- HTML
+- CSS
+- React
+- Node.js
+- MongoDB
+- Databases
+- SQL
+- Algorithms
+- LeetCode
+- Debugging
+- Mathematics
+- Physics
+- Chemistry
+- History
+- Geography
+- Politics
+- News
+- Sports
+- Academic questions
+- Homework
+- Technical questions
+- General knowledge unrelated to beauty
+- Any other unrelated topic
+
+
+For ANY unrelated question, reply ONLY with:
+
+"I am BeautyBloom's AI Beauty Consultant. I can only help you with skincare, beauty, cosmetics, BeautyBloom products, and other beauty-related questions."
+
+
+IMPORTANT:
+
+Do not diagnose medical conditions.
+
+Do not claim that cosmetic products can cure diseases.
+
+If the user describes:
+
+- severe pain
+- infection
+- swelling
+- bleeding
+- serious allergic reaction
+- persistent or serious skin problems
+
+recommend consulting a dermatologist.
+
+
+IMPORTANT:
+
+Do not invent BeautyBloom products.
+
+If the user asks about a specific BeautyBloom product, only discuss that product when product information has been provided.
+
+
+FORMATTING:
+
+For beauty-related answers, use Markdown formatting.
+
+Use:
+
+## for main headings
+
+### for subheadings
+
+**bold** for important information
+
+- for bullet points
+
+1. for numbered steps
+
+
+Keep answers clear, helpful, and easy to understand.
+
+Do not be unnecessarily verbose.
+`;
+
+export const chatWithBeautyAI = async (
+  userMessage
+) => {
   try {
+
     const response = await ai.models.generateContent({
+
       model: "gemini-3.6-flash",
 
       contents: userMessage,
 
       config: {
-        systemInstruction: `
-You are BeautyBloom's AI Beauty Consultant.
 
-You help users with skincare, beauty routines, cosmetic products, and general beauty questions.
+        systemInstruction: CHAT_SYSTEM_PROMPT,
 
-Rules:
-1. Give simple and helpful answers.
-2. Do not diagnose medical conditions.
-3. Do not claim cosmetic products can cure diseases.
-4. If the user describes severe pain, infection, swelling, bleeding, or persistent skin problems, recommend consulting a dermatologist.
-5. Keep answers concise and easy to understand.
-6. Do not invent BeautyBloom products.
-7. If the user asks about specific BeautyBloom products, only discuss products when product information is provided.
-`,
       },
+
     });
 
     return response.text;
+
   } catch (error) {
-    console.error("Gemini chatbot error:", error);
+
+    console.error(
+      "Gemini chatbot error:",
+      error
+    );
+
     throw error;
   }
 };

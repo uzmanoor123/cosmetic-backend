@@ -5,9 +5,7 @@ const getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({
       user: req.user.id,
-    })
-      .populate("items.product")
-      .sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 });
 
     const ordersWithReviews = await Promise.all(
       orders.map(async (order) => {

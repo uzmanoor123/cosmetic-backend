@@ -5,6 +5,9 @@ export const recommendProducts = async (req, res) => {
   try {
     const { skinProblem } = req.body;
 
+    console.log("Skin Problem Received:");
+    console.log(skinProblem);
+
     if (!skinProblem || !skinProblem.trim()) {
       return res.status(400).json({
         success: false,
@@ -16,7 +19,12 @@ export const recommendProducts = async (req, res) => {
       category: "Skincare",
     }).lean();
 
-    if (!products || products.length === 0) {
+    console.log(
+      "Skincare products found:",
+      products.length
+    );
+
+    if (products.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No skincare products are available.",
@@ -28,46 +36,69 @@ export const recommendProducts = async (req, res) => {
       products
     );
 
-    const recommendedIds = aiResult.recommendations.map(
+    console.log("AI Result:");
+    console.log(aiResult);
+
+    const recommendations =
+      aiResult.recommendations || [];
+
+    const recommendedIds = recommendations.map(
       (item) => item.productId
     );
 
-    const recommendedProducts = products.filter((product) =>
-      recommendedIds.includes(product._id.toString())
+    const recommendedProducts = products.filter(
+      (product) =>
+        recommendedIds.includes(product._id.toString())
     );
 
-    const finalRecommendations = recommendedProducts.map(
-      (product) => {
+    const finalRecommendations =
+      recommendedProducts.map((product) => {
         const aiRecommendation =
-          aiResult.recommendations.find(
+          recommendations.find(
             (item) =>
-              item.productId === product._id.toString()
+              item.productId ===
+              product._id.toString()
           );
 
         return {
           ...product,
 
-          reason: aiRecommendation?.reason || "",
-          matchScore: aiRecommendation?.matchScore || 0,
+          reason:
+            aiRecommendation?.reason || "",
+
+          matchScore:
+            aiRecommendation?.matchScore || 0,
         };
-      }
-    );
+      });
 
     finalRecommendations.sort(
       (a, b) => b.matchScore - a.matchScore
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: aiResult.message,
-      recommendations: finalRecommendations,
-    });
-  } catch (error) {
-    console.error("AI Controller Error:", error);
 
-    res.status(500).json({
+      message:
+        aiResult.message ||
+        "Here are the products we recommend for you.",
+
+      recommendations: finalRecommendations,
+
+      beautyTips: aiResult.beautyTips || [],
+    });
+
+  } catch (error) {
+    console.error(
+      "AI Controller Error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Failed to generate recommendations.",
+
+      message:
+        "Failed to generate recommendations.",
+
       error: error.message,
     });
   }
@@ -98,4 +129,3 @@ export const beautyChat = async (req, res) => {
     });
   }
 };
-
